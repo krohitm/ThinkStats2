@@ -303,3 +303,102 @@ live %>%
 ```
 Histograms are useful because they make the most frequent values immediately apparent. But they are not the best choice for comparing two distributions. In this example, there are fewer "first babies" than "others," so some of the apparent differences in the histograms are due to sample sizes. In the next chapter we address this problem using probability mass functions.
 
+### Effect Size
+An effect size is a summary statistic intended to describe the size of an effect. For example, to describe the difference between two groups, one obvious choice is the difference in the means.
+Mean pregnancy length for first babies is 38.601; for other babies it is 38.523. The difference is 0.078 weeks, which works out to 13 hours. As a fraction of the typical pregnancy length, this difference is about 0.2%. 
+If we assume this estimate is accurate, such a difference would have no practical consequences. In fact, without observing a large number of pregnancies, it is unlikely that anyone would notice this difference at all.
+Another way to convey the size of the effect is to compare the difference between groups to the variability within groups. Cohen's d is a statistic intended to do that; it is defined
+d = (_x1_ - _x2_)/s
+where _x1_ and _x2_ are the means of the groups and s is the "pooled standard
+deviation".
+```{r}
+CohenEffectSize <- function(group1, group2){
+  diff = mean(group1, na.rm = TRUE) - mean(group2, na.rm = TRUE)
+  
+  var1 = var(group1, na.rm=TRUE)
+  var2 = var(group2, na.rm=TRUE)
+  n1 = length(group1)
+  n2 = length(group2)
+  
+  pooled_var = (n1*var1 + n2*var2)/(n1+n2)
+  d = diff/sqrt(pooled_var)
+  return (d)
+}
+```
+
+Let's look at the effect size for difference in totalwgt_lb for first babies vs other babies. 
+```{r}
+firstBirthWgt <- live %>%
+  filter(birthord==1) %>%
+  .$totalwgt_lb
+
+othersBirthWgt <- live %>%
+  filter(birthord!=1) %>%
+  .$totalwgt_lb
+CohenEffectSize(firstBirthWgt, othersBirthWgt)
+```
+
+## Probability Mass Functions
+By plotting the PMF instead of the histogram, we can compare the two distributions without being mislead by the difference in sample size.
+```{r}
+live %>%
+  ggplot(aes(x=prglngth, ..density.., fill=birthNumber)) + 
+  geom_histogram(bins = 20, stat="bin", position = "dodge", na.rm = TRUE) +
+  labs(x="weeks", y="probability") + 
+  theme(legend.position = c(0.2, 0.7)) + 
+  xlim(27, 46)
+```
+```{r}
+live %>%
+  ggplot(aes(x=prglngth, ..density.., color=birthNumber)) +
+  geom_step(binwidth = 0.7, stat="bin", position = "identity", na.rm = TRUE) +
+  labs(x="weeks", y="probability") + 
+  theme(legend.position = c(0.2, 0.7)) + 
+  xlim(27, 46)
+```
+
+Based on this figure, first babies seem to be less likely than others to arrive on time (week 39) and more likely to be a late (weeks 41 and 42).
+
+### Other visualizations
+Histograms and PMFs are useful while you are exploring data and trying to identify patterns and relationships. Once you have an idea what is going on, a good next step is to design a visualization that makes the patterns you have identified as clear as possible.
+
+In the NSFG data, the biggest differences in the distributions are near the mode. So it makes sense to zoom in on that part of the graph, and to transform the data to emphasize differences:
+
+```{r}
+#get the proportion of different number of weeks for prglngth, by order of birth
+prglngthProp <- (table(live$prglngth, live$birthNumber) %>%
+  prop.table(2) * 100 )%>%
+  data.frame()
+prglngthProp['weeks'] <- prglngthProp[, 'Var1'] %>%
+  as.character %>%
+  as.integer
+```
+
+```{r}
+#filter for zooming from 35 to 46 weeks
+p1 <- prglngthProp %>%
+  subset(weeks>=35 & weeks<= 46 & Var2=='first') %>%
+  .[c('weeks', 'Freq')]
+  
+p2 <- prglngthProp %>%
+  subset(weeks>=35 & weeks<= 46 & Var2=='other') %>%
+  .[c('weeks', 'Freq')]
+```
+
+```{r}
+#find difference between the frequencies
+diff <- within(merge(p1, p2, by='weeks'), {
+  weeks <- weeks
+  percent_points <- Freq.x - Freq.y
+})[c('weeks', 'percent_points')]
+```
+
+
+```{r}
+diff %>%
+  ggplot(aes(x=weeks)) +
+  geom_bar() +
+  labs(x="weeks", y="percentage points") #+ 
+  #theme(legend.position = c(0.2, 0.7)) + 
+  #xlim(27, 46)
+```
