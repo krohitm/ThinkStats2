@@ -296,7 +296,7 @@ live['birthNumber'] <- if_else(live$birthord==1, 'first', 'other')
 ```{r}
 live %>%
   ggplot(aes(x=prglngth, fill=birthNumber)) + 
-  geom_histogram(bins=20, position="dodge", na.rm = TRUE) +
+  geom_histogram(bins=20, position="dodge", na.rm = TRUE, color='black') +
   labs(x="Weeks", y="Frequency") + 
   theme(legend.position = c(0.2, 0.7)) + 
   xlim(27, 46)
@@ -343,7 +343,7 @@ By plotting the PMF instead of the histogram, we can compare the two distributio
 ```{r}
 live %>%
   ggplot(aes(x=prglngth, ..density.., fill=birthNumber)) + 
-  geom_histogram(bins = 20, stat="bin", position = "dodge", na.rm = TRUE) +
+  geom_histogram(bins = 20, stat="bin", position = "dodge", na.rm = TRUE, color='black') +
   labs(x="weeks", y="probability") + 
   theme(legend.position = c(0.2, 0.7)) + 
   xlim(27, 46)
@@ -377,11 +377,11 @@ prglngthProp['weeks'] <- prglngthProp[, 'Var1'] %>%
 ```{r}
 #filter for zooming from 35 to 46 weeks
 p1 <- prglngthProp %>%
-  subset(weeks>=35 & weeks<= 46 & Var2=='first') %>%
+  subset(weeks>=35 & weeks< 46 & Var2=='first') %>%
   .[c('weeks', 'Freq')]
   
 p2 <- prglngthProp %>%
-  subset(weeks>=35 & weeks<= 46 & Var2=='other') %>%
+  subset(weeks>=35 & weeks< 46 & Var2=='other') %>%
   .[c('weeks', 'Freq')]
 ```
 
@@ -395,10 +395,113 @@ diff <- within(merge(p1, p2, by='weeks'), {
 
 
 ```{r}
+#plot the differences as column graph
 diff %>%
-  ggplot(aes(x=weeks)) +
-  geom_bar() +
-  labs(x="weeks", y="percentage points") #+ 
-  #theme(legend.position = c(0.2, 0.7)) + 
-  #xlim(27, 46)
+  ggplot(aes(weeks, percent_points)) +
+  geom_col(color='black', fill='purple') +
+  labs(x="weeks", y="percentage points")
 ```
+This figure makes the pattern clearer: first babies are less likely to be born in week 39, and somewhat more likely to be born in weeks 41 and 42.
+
+## Cumulative Distribution Functions
+### Limitations of PMF
+PMFs work well if the number of values is small. But as the number of values increases, the probability associated with each value gets smaller and the effect of random noise increases.
+
+```{r}
+live %>%
+  ggplot(aes(x=totalwgt_lb, ..density.., fill=birthOrder)) + 
+  geom_histogram(bins=100, stat="bin", na.rm = TRUE, color='black') +
+  labs(x="weight(pounds)", y="probability") + 
+  theme(legend.position = c(0.2, 0.7)) 
+```
+
+Overall, these distributions resemble the bell shape of a normal distribution, with many values near the mean and a few values much higher and lower. But parts of this figure are hard to interpret. There are many spikes and valleys, and some apparent differences between the distributions. It is hard to tell which of these features are meaningful. Also, it is hard to see overall patterns; for example, which distribution do you think has the higher mean?
+
+An alternative that avoids these problems is the cumulative distribution function (CDF).
+
+### CDF
+```{r}
+live %>%
+  ggplot(aes(x=prglngth)) +
+  stat_ecdf(geom="step", na.rm = TRUE, color='blue') +
+  labs(x="weeks", y="CDF") + 
+  theme(legend.position = c(0.2, 0.7)) 
+```
+
+One way to read a CDF is to look up percentiles. For example, it looks like about 10% of pregnancies are shorter than 36 weeks, and about 90% are shorter than 41 weeks. 
+The CDF also provides a visual representation of the shape of the distribution. Common values appear as steep or vertical sections of the CDF; in this example, the mode at 39 weeks is apparent. There are few values below 30 weeks, so the CDF in this range is flat.
+
+### Comparing CDFs
+CDFs are especially useful for comparing distributions. For example, here is the code that plots the CDF of birth weight for first babies and others.
+```{r}
+live %>%
+  ggplot(aes(x=totalwgt_lb, color=birthOrder)) +
+  stat_ecdf(geom="step", na.rm = TRUE) +
+  labs(x="weight(pounds)", y="CDF") + 
+  theme(legend.position = c(0.2, 0.7)) 
+```
+Compared to PMFs, this figure makes the shape of the distributions, and the differences between them, much clearer. We can see that first babies are slightly lighter throughout the distribution, with a larger discrepancy above the mean.
+
+### Percentile-based statistics
+Once you have computed a CDF, it is easy to compute percentiles and percentile ranks. Percentile can be used to compute percentile-based summary statistics. For example, the 50th percentile is the value that divides the distribution in half, also known as the median.
+```{r}
+#50th percentile of pregnancy lengths
+live$prglngth %>%
+  quantile(.50, na.rm = TRUE)
+#different quartiles of total birth weight
+live$totalwgt_lb %>%
+  summary
+```
+
+### Random Numbers
+Suppose we choose a random sample from the population of live births and look up the percentile rank of their birth weights. Now suppose we compute the CDF of the percentile ranks. What do you think the distribution will look like?
+```{r}
+live[sample(nrow(live), 100, replace = TRUE),] %>% 
+ mutate(percrank=rank(totalwgt_lb)/length(totalwgt_lb)) %>%
+  ggplot(aes(x=percrank)) +
+  stat_ecdf(geom="step", na.rm = TRUE, color='blue') +
+  labs(x="precentile rank", y="CDF")
+```
+The CDF is approximately a straight line, which means that the distribution is uniform.
+
+```{r}
+live[sample(nrow(live), 100, replace = TRUE),] %>% 
+ mutate(percrank=rank(totalwgt_lb)/length(totalwgt_lb)) %>%
+  ggplot(aes(x=percrank, ..density..)) + 
+  geom_histogram(stat="bin", na.rm = TRUE, color='black', fill='light blue') +
+  labs(x="percentile rank", y="probability")
+```
+
+That outcome might be non-obvious, but it is a consequence of the way the CDF is defined. What this figure shows is that 10% of the sample is below the 10th percentile, 20% is below the 20th percentile, and so on, exactly as we should expect. So, regardless of the shape of the CDF, the distribution of percentile ranks is uniform.
+
+## Comparing percentile ranks
+Percentile ranks are useful for comparing measurements across different groups. For example, people who compete in foot races are usually grouped by age and gender. To compare people in different age groups, you can convert race times to percentile ranks.
+
+## Modeling Distributions
+The distributions we have used so far are called empirical distributions because they are based on empirical observations, which are necessarily finite samples.
+The alternative is an analytic distribution, which is characterized by a CDF that is a mathematical function. Analytic distributions can be used to model empirical distributions. In this context, a model is a simplification that leaves out unneeded details. This chapter presents common analytic distributions and uses them to model data from a variety of sources.
+
+### Exponential Distribution
+The CDF of the exponential distribution is: CDF(x) = 1 - e^(-lambda*x). The parameter, lambda, determines the shape of the distribution.
+```{r}
+data.frame(x = c(0,3.0)) %>%
+  ggplot(mapping = aes(x)) +
+  stat_function(fun=pexp, args=list(rate=0.5), aes(colour='0.5')) + 
+  stat_function(fun=pexp, args=list(rate=1), aes(colour='1')) + 
+  stat_function(fun=pexp, args=list(rate=2), aes(colour='2')) + 
+  scale_color_manual('lambda', values = c('green', 'light blue', 'blue')) +
+  labs(x="x", y="CDF")
+```
+This figure shows how the CDF of exponential distribution for lambda = 0.5, 1, and 2 looks like.
+
+In the real world, exponential distributions come up when we look at a series of events and measure the times between events, called interarrival times. If the events are equally likely to occur at any time, the distribution of interarrival times tends to look like an exponential distribution.
+
+As an example, we will look at the interarrival time of births. On December 18, 1997, 44 babies were born in a hospital in Brisbane, Australia. The time of birth for all 44 babies was reported in the local paper; the complete dataset is in a file called babyboom.dat, in the ThinkStats2 repository. It has 4 columns time, sex, weight_g, and minutes, where minutes is time of birth converted to minutes since midnight.
+```{r}
+babyBoom <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/babyboom.dat',skip = 59, widths = c(8, 8, 8, 8), col.names = c('time', 'sex', 'weight_g', 'minutes'))
+```
+
+```{r}
+bab
+```
+
