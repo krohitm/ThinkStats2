@@ -606,41 +606,85 @@ The parameters of the lognormal distribution are usually denoted mu and sigma. B
 If a sample is approximately lognormal and you plot its CDF on a log-x scale, it will have the characteristic shape of a normal distribution. To test how well the sample fits a lognormal model, you can make a normal probability plot using the log of the values in the sample.
 As an example, let's look at the distribution of adult weights, which is approximately lognormal. 
 The National Center for Chronic Disease Prevention and Health Promotion conducts an annual survey as part of the Behavioral Risk Factor Surveillance System (BRFSS). In 2008, they interviewed 414,509 respondents and asked about their demographics, health, and health risks. Among the data they collected are the weights in kilograms of 398,484 respondents.
-
+The codebook can be found at https://www.cdc.gov/brfss/annual_data/2008/pdf/codebook08.pdf
 ```{r}
 adultWeight <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/CDBRFS08.ASC.gz', 
-                        widths = c(101, 2, 24, 4, 12, 1, 655, 9, 442, 3, 5), 
-                        col.names = c('v1', 'age', 'v2', 'wtyrago', 'v3', 'sex', 'v4', 'finalwt', 'v5', 'htm3', 'wtkg2'))
+                        widths = c(1253, 5), col.names = c('v1', 'wtkg2'))
 ```
 
 ```{r}
-#clean weight
+#clean weight, as per the codebook
 adultWeight$wtkg2[adultWeight$wtkg2==99999] <- NA
 adultWeight$wtkg2 <- adultWeight$wtkg2/100.0
-
-# clean weight a year ago
-adultWeight$wtyrago[adultWeight$wtyrago %in% c(7777,9999)] <- NA
-adultWeight['wtyrago'] <- if_else(adultWeight$wtyrago < 9000, 
-                                  adultWeight$wtyrago/2.2, 
-                                  adultWeight$wtyrago-9000)
-```
-
-```{r}
-adultWeight['wtyrago']
 ```
 
 
 ```{r}
+#calculate mean and standard deviations of the weights, to build the model
+mu <- adultWeight$wtkg2 %>%
+  mean(na.rm=TRUE)
+sigma <- adultWeight$wtkg2 %>%
+  sd(na.rm = TRUE)
+#plot the theoretical normal distribution with calculated mean and standard deviation, against the empirical distribution
 adultWeight %>%
-  ggplot(aes(x=wtyrago)) +
-  stat_ecdf(geom="step", na.rm = TRUE, aes(color='data'))
-  #taking live births with full term only
-  #geom_qq(aes(sample=adultWeight$wtyrago, color='full term'), 
-  #        na.rm = TRUE, geom="line") #+
-  #the model as per mu and sigma
-  #geom_qq(aes(sample = rnorm(length(live$totalwgt_lb), mean = 7.4, sd = 1.2), 
-   #           color='model'), geom='line')
-  #geom_qq(aes(sample = rlogis(100)), 
-    #      geom='line')
+  ggplot(aes(x=wtkg2)) +
+  stat_ecdf(geom="step", na.rm = TRUE, aes(color='weights')) + 
+  stat_function(fun=pnorm, args=list(mean=mu, sd=sigma), aes(color='model')) +
+  labs(x="adult weight (kg)", y="CDF") + 
+  scale_color_manual('CDF', values = c('blue', 'red')) +
+  theme(legend.position = c(0.8, 0.2)) 
+```
+```{r}
+adultWeight$wtkg2 %>%
+  log10 %>%
+  mean(na.rm=TRUE)
 ```
 
+```{r}
+#taking log of mean and standard deviation
+logmu <- adultWeight$wtkg2 %>%
+  log10 %>%
+  mean(na.rm=TRUE)
+logsigma <- adultWeight$wtkg2 %>%
+  log10 %>%
+  sd(na.rm=TRUE)
+
+#plot the theoretical normal distribution with calculated log mean and log standard deviation, against the empirical log distribution
+adultWeight %>%
+  ggplot(aes(x=log10(wtkg2))) +
+  stat_ecdf(geom="step", na.rm = TRUE, aes(color='weights')) + 
+  stat_function(fun=pnorm, args=list(mean=logmu, sd=logsigma), aes(color='model')) +
+  labs(x="adult weight (log10 kg)", y="CDF") + 
+  scale_color_manual('CDF', values = c('blue', 'red')) +
+  theme(legend.position = c(0.8, 0.2)) 
+```
+The two figures above show the distribution of adult weights on a linear scale with a normal model, and on a log scale with a lognormal model, respectively. The lognormal model is a better fit, but this representation of the data does not make the dierence particularly dramatic.
+
+The figures below shows normal probability plots for adult weights, w, and for their
+logarithms, log10 w. Now it is apparent that the data deviate substantially
+from the normal model. On the other hand, the lognormal model is a good
+match for the data.
+```{r}
+ggplot()+
+  stat_qq(aes(sample=adultWeight$wtkg2, color='weights'), 
+          na.rm = TRUE, geom="line", distribution = qnorm) +
+  #the model as per mu and sigma
+  geom_qq(aes(sample = rnorm(length(adultWeight$wtkg2), mean=mu, sd=sigma), 
+              color='model'), geom='line') +
+  scale_color_manual('Cases', values = c('blue', 'red')) +
+  labs(x='z', y='adult weight(kg)') +
+  theme(legend.position = c(0.2, 0.7)) 
+```
+
+```{r}
+ggplot()+
+  #taking logarithmic weights
+  stat_qq(aes(sample=log10(adultWeight$wtkg2), color='weights'), 
+          na.rm = TRUE, geom="line", distribution = qnorm) +
+  #the model as per mu and sigma
+  geom_qq(aes(sample = rnorm(length(adultWeight$wtkg2), mean=logmu, sd=logsigma), 
+              color='model'), geom='line') +
+  scale_color_manual('Cases', values = c('blue', 'red')) +
+  labs(x='z', y='adult weight(log10 kg)') +
+  theme(legend.position = c(0.2, 0.7)) 
+```
