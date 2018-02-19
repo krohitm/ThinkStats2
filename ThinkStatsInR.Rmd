@@ -482,26 +482,165 @@ The distributions we have used so far are called empirical distributions because
 The alternative is an analytic distribution, which is characterized by a CDF that is a mathematical function. Analytic distributions can be used to model empirical distributions. In this context, a model is a simplification that leaves out unneeded details. This chapter presents common analytic distributions and uses them to model data from a variety of sources.
 
 ### Exponential Distribution
-The CDF of the exponential distribution is: CDF(x) = 1 - e^(-lambda*x). The parameter, lambda, determines the shape of the distribution.
+The CDF of the exponential distribution is: CDF(x) = 1 - e^(-λ*x). The parameter, λ, determines the shape of the distribution.
 ```{r}
 data.frame(x = c(0,3.0)) %>%
   ggplot(mapping = aes(x)) +
   stat_function(fun=pexp, args=list(rate=0.5), aes(colour='0.5')) + 
   stat_function(fun=pexp, args=list(rate=1), aes(colour='1')) + 
   stat_function(fun=pexp, args=list(rate=2), aes(colour='2')) + 
-  scale_color_manual('lambda', values = c('green', 'light blue', 'blue')) +
+  #scale_color_manual('λ', values = c('green', 'light blue', 'blue')) +
   labs(x="x", y="CDF")
 ```
 This figure shows how the CDF of exponential distribution for lambda = 0.5, 1, and 2 looks like.
 
-In the real world, exponential distributions come up when we look at a series of events and measure the times between events, called interarrival times. If the events are equally likely to occur at any time, the distribution of interarrival times tends to look like an exponential distribution.
+In the real world, exponential distributions come up when we look at a series of events and measure the times between events, called interarrival times. *If the events are equally likely to occur at any time, the distribution of interarrival times tends to look like an exponential distribution.*
 
 As an example, we will look at the interarrival time of births. On December 18, 1997, 44 babies were born in a hospital in Brisbane, Australia. The time of birth for all 44 babies was reported in the local paper; the complete dataset is in a file called babyboom.dat, in the ThinkStats2 repository. It has 4 columns time, sex, weight_g, and minutes, where minutes is time of birth converted to minutes since midnight.
 ```{r}
 babyBoom <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/babyboom.dat',skip = 59, widths = c(8, 8, 8, 8), col.names = c('time', 'sex', 'weight_g', 'minutes'))
 ```
 
+
 ```{r}
-bab
+babyBoom %>%
+  mutate(diffs = minutes - lag(minutes)) %>%
+  ggplot(mapping=aes(diffs)) +
+  geom_step(aes(y=..y..), stat='ecdf', na.rm=TRUE, color='blue') +
+  labs(x='minutes', y='CDF')
+```
+
+This figure shows the CDF of interarrival times. It seems to have the general shape of an exponential distribution, but how can we tell?
+One way is to plot the complementary CDF, which is 1 - CDF(x), on a log-y scale. For data from an exponential distribution, the result is a straight line.
+
+```{r}
+babyBoom %>%
+  mutate(diffs = minutes - lag(minutes)) %>%
+  ggplot(mapping=aes(diffs)) +
+  geom_step(aes(y=log10(1-..y..)), stat='ecdf', na.rm=TRUE, color='blue') +
+  labs(x='minutes', y='CCDF')
+```
+It is not exactly straight, which indicates that the exponential distribution is not a perfect model for this data. *Most likely the underlying assumption -- that a birth is equally likely at any time of day -- is not exactly true.* Nevertheless, it might be reasonable to model this dataset with an exponential distribution. With that simplification, we can summarize the distribution with a single parameter.
+
+The parameter, λ, can be interpreted as a rate; that is, the number of events
+that occur, on average, in a unit of time. In this example, 44 babies are
+born in 24 hours, so the rate is λ = 0.0306 births per minute. The mean of
+an exponential distribution is 1/λ, so the mean time between births is 32.7
+minutes.
+
+### Normal Distribution
+The normal distribution with μ = 0 and σ = 1 is called the standard normal distribution.
+```{r}
+data.frame(x = c(-1, 4)) %>%
+  ggplot(mapping = aes(x)) +
+  stat_function(fun=pnorm, args=list(mean=1, sd=0.5), aes(colour='mean=1, sd=0.5')) + 
+  stat_function(fun=pnorm, args=list(mean=2, sd=0.4), aes(colour='mean=2, sd=0.4')) + 
+  stat_function(fun=pnorm, args=list(mean=3, sd=0.3), aes(colour='mean=3, sd=0.3')) + 
+  #scale_color_manual('mean, sd', values = c('green', 'red', 'blue')) +
+  labs(x="x", y="CDF")
+```
+This figure shows CDFs for normal distributions with a range of parameters. The sigmoid shape of these curves is a recognizable characteristic of a normal distribution.
+
+We earlier looked at the distribution of birth weights. Next figure shows the empirical CDF of weights for all live births and the CDF of a normal distribution with the same mean and variance.
+```{r}
+live$totalwgt_lb %>%
+  mean(na.rm=TRUE)
+live$totalwgt_lb %>%
+  sd(na.rm=TRUE)
+```
+```{r}
+live %>%
+  ggplot(aes(x=totalwgt_lb)) +
+  stat_ecdf(geom="step", na.rm = TRUE, aes(color='data')) +
+  stat_function(fun=pnorm, args=list(mean=7.28, sd=1.24), aes(color='model')) +
+  labs(x="weight(pounds)", y="CDF") + 
+  scale_color_manual('CDF', values = c('blue', 'red')) +
+  theme(legend.position = c(0.8, 0.2)) 
+```
+The normal distribution is a good model for this dataset, so if we summarize the distribution with the parameters μ = 7.28 and σ = 1.24, the resulting error (difference between the model and the data) is small.
+
+Below the 10th percentile there is a discrepancy between the data and the model; there are more light babies than we would expect in a normal distribution. If we are specifically interested in preterm babies, it would be important to get this part of the distribution right, so it might not be appropriate to use the normal model.
+
+### Normal Probability Plot
+For the exponential distribution, and a few others, there are simple transformations we can use to test whether an analytic distribution is a good model for a dataset.
+For the normal distribution there is no such transformation, but there is an alternative called a normal probability plot.
+```{r}
+ggplot()+
+  geom_qq(aes(sample = rnorm(400, mean = 0, sd = 1), color='mean = 0, sd = 1'), 
+          geom='line') +
+  geom_qq(aes(sample = rnorm(400, mean = 1, sd = 1), color='mean = 1, sd = 1'), 
+          geom='line') +
+  geom_qq(aes(sample = rnorm(400, mean = 5, sd = 2), color='mean = 5, sd = 2'), 
+          geom='line') + 
+  scale_color_manual('Parameters', values = c('blue', 'red', 'green')) +
+  labs(x='standard normal sample', y='sample values') +
+  theme(legend.position = c(0.2, 0.7)) 
+```
+*If the distribution of the sample is approximately normal, the result is a
+straight line with intercept mu and slope sigma.* In the figure above, values are generated from normal distributions with different values of mu and sigma. The lines are approximately straight, with values in the tails deviating more than values near the mean.
+
+Now let's try it with real data. We will generate the normal probability plot for the birth weight data.
+```{r}
+ggplot()+
+  #taking all live births
+  stat_qq(aes(sample=live$totalwgt_lb, color='all live'), 
+          na.rm = TRUE, geom="line", distribution = qnorm) +
+  #taking live births with full term only
+  stat_qq(aes(sample=live$totalwgt_lb[live$prglngth>36], color='full term'), 
+          na.rm = TRUE, geom="line", distribution = qnorm) +
+  #the model as per mu and sigma
+  geom_qq(aes(sample = rnorm(length(live$totalwgt_lb), mean = 7.4, sd = 1.2), 
+              color='model'), geom='line') +
+  scale_color_manual('Cases', values = c('blue', 'light blue', 'red')) +
+  labs(x='Standard Deviations from mean', y='Birth weight(pounds)') +
+  theme(legend.position = c(0.2, 0.7)) 
+```
+This figure shows the results for all live births, and also for full term births (pregnancy length greater than 36 weeks). Both curves match the model near the mean and deviate in the tails. The heaviest babies are heavier than what the model expects, and the lightest babies are lighter.
+When we select only full term births, we remove some of the lightest weights, which reduces the discrepancy in the lower tail of the distribution. 
+This plot suggests that the normal model describes the distribution well within a few standard deviations from the mean, but not in the tails. Whether it is good enough for practical purposes depends on the purposes.
+
+### Lognormal distribution
+If the logarithms of a set of values have a normal distribution, the values have a lognormal distribution. The CDF of the lognormal distribution is the same as the CDF of the normal distribution, with log x substituted for x.
+The parameters of the lognormal distribution are usually denoted mu and sigma. But remember that these parameters are not the mean and standard deviation.
+
+If a sample is approximately lognormal and you plot its CDF on a log-x scale, it will have the characteristic shape of a normal distribution. To test how well the sample fits a lognormal model, you can make a normal probability plot using the log of the values in the sample.
+As an example, let's look at the distribution of adult weights, which is approximately lognormal. 
+The National Center for Chronic Disease Prevention and Health Promotion conducts an annual survey as part of the Behavioral Risk Factor Surveillance System (BRFSS). In 2008, they interviewed 414,509 respondents and asked about their demographics, health, and health risks. Among the data they collected are the weights in kilograms of 398,484 respondents.
+
+```{r}
+adultWeight <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/CDBRFS08.ASC.gz', 
+                        widths = c(101, 2, 24, 4, 12, 1, 655, 9, 442, 3, 5), 
+                        col.names = c('v1', 'age', 'v2', 'wtyrago', 'v3', 'sex', 'v4', 'finalwt', 'v5', 'htm3', 'wtkg2'))
+```
+
+```{r}
+#clean weight
+adultWeight$wtkg2[adultWeight$wtkg2==99999] <- NA
+adultWeight$wtkg2 <- adultWeight$wtkg2/100.0
+
+# clean weight a year ago
+adultWeight$wtyrago[adultWeight$wtyrago %in% c(7777,9999)] <- NA
+adultWeight['wtyrago'] <- if_else(adultWeight$wtyrago < 9000, 
+                                  adultWeight$wtyrago/2.2, 
+                                  adultWeight$wtyrago-9000)
+```
+
+```{r}
+adultWeight['wtyrago']
+```
+
+
+```{r}
+adultWeight %>%
+  ggplot(aes(x=wtyrago)) +
+  stat_ecdf(geom="step", na.rm = TRUE, aes(color='data'))
+  #taking live births with full term only
+  #geom_qq(aes(sample=adultWeight$wtyrago, color='full term'), 
+  #        na.rm = TRUE, geom="line") #+
+  #the model as per mu and sigma
+  #geom_qq(aes(sample = rnorm(length(live$totalwgt_lb), mean = 7.4, sd = 1.2), 
+   #           color='model'), geom='line')
+  #geom_qq(aes(sample = rlogis(100)), 
+    #      geom='line')
 ```
 
