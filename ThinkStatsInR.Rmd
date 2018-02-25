@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(ggplot2)
+library(extraDistr)
 library(tidyverse)
 library(plotly)
 ```
@@ -489,7 +490,7 @@ data.frame(x = c(0,3.0)) %>%
   stat_function(fun=pexp, args=list(rate=0.5), aes(colour='0.5')) + 
   stat_function(fun=pexp, args=list(rate=1), aes(colour='1')) + 
   stat_function(fun=pexp, args=list(rate=2), aes(colour='2')) + 
-  #scale_color_manual('λ', values = c('green', 'light blue', 'blue')) +
+  scale_color_manual('λ', values = c('green', 'red', 'blue')) +
   labs(x="x", y="CDF")
 ```
 This figure shows how the CDF of exponential distribution for lambda = 0.5, 1, and 2 looks like.
@@ -536,7 +537,7 @@ data.frame(x = c(-1, 4)) %>%
   stat_function(fun=pnorm, args=list(mean=1, sd=0.5), aes(colour='mean=1, sd=0.5')) + 
   stat_function(fun=pnorm, args=list(mean=2, sd=0.4), aes(colour='mean=2, sd=0.4')) + 
   stat_function(fun=pnorm, args=list(mean=3, sd=0.3), aes(colour='mean=3, sd=0.3')) + 
-  #scale_color_manual('mean, sd', values = c('green', 'red', 'blue')) +
+  scale_color_manual('params', values = c('green', 'red', 'blue')) +
   labs(x="x", y="CDF")
 ```
 This figure shows CDFs for normal distributions with a range of parameters. The sigmoid shape of these curves is a recognizable characteristic of a normal distribution.
@@ -658,12 +659,10 @@ adultWeight %>%
   scale_color_manual('CDF', values = c('blue', 'red')) +
   theme(legend.position = c(0.8, 0.2)) 
 ```
-The two figures above show the distribution of adult weights on a linear scale with a normal model, and on a log scale with a lognormal model, respectively. The lognormal model is a better fit, but this representation of the data does not make the dierence particularly dramatic.
+The two figures above show the distribution of adult weights on a linear scale with a normal model, and on a log scale with a lognormal model, respectively. The lognormal model is a better fit, but this representation of the data does not make the difference particularly dramatic.
 
 The figures below shows normal probability plots for adult weights, w, and for their
-logarithms, log10 w. Now it is apparent that the data deviate substantially
-from the normal model. On the other hand, the lognormal model is a good
-match for the data.
+logarithms, log10 w.
 ```{r}
 ggplot()+
   stat_qq(aes(sample=adultWeight$wtkg2, color='weights'), 
@@ -688,3 +687,95 @@ ggplot()+
   labs(x='z', y='adult weight(log10 kg)') +
   theme(legend.position = c(0.2, 0.7)) 
 ```
+Now it is apparent that the data deviate substantially
+from the normal model. On the other hand, the lognormal model is a good
+match for the data.
+
+### Pareto distribution
+The Pareto distribution is named after the economist Vilfredo Pareto, who used it to describe the distribution of wealth. Since then, it has been used to describe phenomena in the natural and social sciences including sizes of cities and towns, sand particles and meteorites, forest fires and earthquakes.
+The CDF of the Pareto distribution is:
+CDF(x) = 1 - (x/xm)^-a
+The parameters xm and a determine the location and shape of the distribution. xm is the minimum possible value. Figure below shows Pareto distributions for xm = 0.5 and different values of a.
+```{r}
+data.frame(x = c(0, 10)) %>%
+  ggplot(mapping = aes(x)) +
+  stat_function(fun=ppareto, args=list(a=0.5, b=0.5), aes(colour='a=0.5')) + 
+  stat_function(fun=ppareto, args=list(a=1, b=0.5), aes(colour='a=1')) + 
+  stat_function(fun=ppareto, args=list(a=2, b=0.5), aes(colour='a=2')) + 
+  scale_color_manual('params', values = c('green', 'red', 'blue')) +
+  labs(x="x", y="CDF")
+```
+There is a simple visual test that indicates whether an empirical distribution fits a Pareto distribution: on a log-log scale, the CCDF looks like a straight line.
+As an example, let's look at the sizes of cities and towns. The U.S. Census Bureau publishes the population of every incorporated city and town in the United States.
+```{r}
+#reading data
+df <- read.csv('~/Documents/CodeWork/ThinkStats2/code/PEP_2012_PEPANNRES_with_ann.csv', stringsAsFactors = FALSE, skip = 1)
+
+#extract population
+pops <- df[7] %>% 
+  rapply(function(x) ifelse(x==0,NA,x), how = "replace") %>%
+  drop_na
+
+#get log10 of population
+log_pops <- log10(pops)
+```
+
+
+```{r}
+ggplot(data.frame(x=log_pops), aes(x)) +
+  geom_step(aes(y=log10(1-..y..)), stat='ecdf', na.rm=TRUE, color='blue') +
+  geom_step(data=data.frame(x=rpareto(length(pops), a=1.4, b=5000)), 
+            aes(x=log10(x), y=log10(1-..y..)), stat='ecdf', color='red')
+```
+
+This figure shows the CCDF of populations on a log-log scale. The largest 1% of cities and towns, below 10^-2, fall along a straight line. So we could conclude, as some researchers have, that the tail of this distribution fits a Pareto model.
+
+On the other hand, a lognormal distribution also models the data well. 
+
+```{r}
+#taking log of mean and standard deviation
+logmu <- log_pops %>%
+  mean(na.rm=TRUE)
+logsigma <- log_pops %>%
+  sd(na.rm=TRUE)
+
+#plot the theoretical normal distribution with calculated log mean and log standard deviation, against the empirical log distribution
+data.frame(x=log_pops) %>%
+  ggplot(aes(x=x)) +
+  stat_ecdf(geom="step", na.rm = TRUE, aes(color='data')) + 
+  stat_function(fun=pnorm, args=list(mean=logmu, sd=logsigma), aes(color='model')) +
+  labs(x="log10 population", y="CDF") + 
+  scale_color_manual('CDF', values = c('blue', 'red')) +
+  theme(legend.position = c(0.8, 0.2)) 
+```
+
+```{r}
+mu <- log_pops %>%
+  mean(na.rm=TRUE)
+
+sigma <- log_pops %>%
+  sd(na.rm=TRUE)
+
+ggplot()+
+  stat_qq(aes(sample=log_pops, color='data'), 
+          na.rm = TRUE, geom="line", distribution = qnorm) +
+  #the model as per mu and sigma
+  geom_qq(aes(sample = rnorm(length(log_pops), mean = mu, sd = sigma), 
+              color='model'), geom='line') +
+  scale_color_manual('Cases', values = c('blue', 'light blue')) +
+  labs(x='Standard Deviations from mean (z)', y='log10 population') +
+  theme(legend.position = c(0.2, 0.7)) 
+```
+
+The figures above show the CDF of populations and a lognormal model (top), and a normal probability plot (right). Both plots show good agreement between the data and the model.
+Neither model is perfect. The Pareto model only applies to the largest 1% of cities, but it is a better fit for that part of the distribution. The lognormal model is a better fit for the other 99%. Which model is appropriate depends on which part of the distribution is relevant.
+
+### Generating Random Numbers
+Analytic CDFs can be used to generate random numbers with a given distribution function, p = CDF(x). If there is an effcient way to compute the inverse CDF, we can generate random values with the appropriate distribution by choosing p from a uniform distribution between 0 and 1, then choosing x = ICDF(p).
+
+### Why model?
+Like all models, analytic distributions are abstractions, which means they leave out details that are considered irrelevant. For example, an observed distribution might have measurement errors or quirks that are specific to the sample; analytic models smooth out these idiosyncrasies.
+Analytic models are also a form of data compression. When a model fits a dataset well, a small set of parameters can summarize a large amount of data.
+It is sometimes surprising when data from a natural phenomenon fit an analytic distribution, but these observations can provide insight into physical systems. Sometimes we can explain why an observed distribution has a particular form. For example, Pareto distributions are often the result of generative processes with positive feedback (so-called preferential attachment processes).
+Also, analytic distributions lend themselves to mathematical analysis.
+But it is important to remember that all models are imperfect. Data from the real world never fit an analytic distribution perfectly. People sometimes talk as if data are generated by models; for example, they might say that the distribution of human heights is normal, or the distribution of income is lognormal. Taken literally, these claims cannot be true; there are always differences between the real world and mathematical models.
