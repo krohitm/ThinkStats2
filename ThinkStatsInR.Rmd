@@ -609,25 +609,28 @@ As an example, let's look at the distribution of adult weights, which is approxi
 The National Center for Chronic Disease Prevention and Health Promotion conducts an annual survey as part of the Behavioral Risk Factor Surveillance System (BRFSS). In 2008, they interviewed 414,509 respondents and asked about their demographics, health, and health risks. Among the data they collected are the weights in kilograms of 398,484 respondents.
 The codebook can be found at https://www.cdc.gov/brfss/annual_data/2008/pdf/codebook08.pdf
 ```{r}
-adultWeight <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/CDBRFS08.ASC.gz', 
-                        widths = c(1253, 5), col.names = c('v1', 'wtkg2'))
+brfss <- read.fwf('~/Documents/CodeWork/ThinkStats2/code/CDBRFS08.ASC.gz', 
+                        widths = c(142, 1, 1107, 3, 5), 
+                  col.names = c('v1', 'sex', 'v2', 'htm3', 'wtkg2'))
 ```
 
 ```{r}
-#clean weight, as per the codebook
-adultWeight$wtkg2[adultWeight$wtkg2==99999] <- NA
-adultWeight$wtkg2 <- adultWeight$wtkg2/100.0
+#clean variables, as per the codebook
+brfss$wtkg2[brfss$wtkg2==99999] <- NA
+brfss$wtkg2 <- brfss$wtkg2/100.0
+
+brfss$htm3[brfss$htm3==999] <- NA
 ```
 
 
 ```{r}
 #calculate mean and standard deviations of the weights, to build the model
-mu <- adultWeight$wtkg2 %>%
+mu <- brfss$wtkg2 %>%
   mean(na.rm=TRUE)
-sigma <- adultWeight$wtkg2 %>%
+sigma <- brfss$wtkg2 %>%
   sd(na.rm = TRUE)
 #plot the theoretical normal distribution with calculated mean and standard deviation, against the empirical distribution
-adultWeight %>%
+brfss %>%
   ggplot(aes(x=wtkg2)) +
   stat_ecdf(geom="step", na.rm = TRUE, aes(color='weights')) + 
   stat_function(fun=pnorm, args=list(mean=mu, sd=sigma), aes(color='model')) +
@@ -635,23 +638,18 @@ adultWeight %>%
   scale_color_manual('CDF', values = c('blue', 'red')) +
   theme(legend.position = c(0.8, 0.2)) 
 ```
-```{r}
-adultWeight$wtkg2 %>%
-  log10 %>%
-  mean(na.rm=TRUE)
-```
 
 ```{r}
 #taking log of mean and standard deviation
-logmu <- adultWeight$wtkg2 %>%
+logmu <- brfss$wtkg2 %>%
   log10 %>%
   mean(na.rm=TRUE)
-logsigma <- adultWeight$wtkg2 %>%
+logsigma <- brfss$wtkg2 %>%
   log10 %>%
   sd(na.rm=TRUE)
 
 #plot the theoretical normal distribution with calculated log mean and log standard deviation, against the empirical log distribution
-adultWeight %>%
+brfss %>%
   ggplot(aes(x=log10(wtkg2))) +
   stat_ecdf(geom="step", na.rm = TRUE, aes(color='weights')) + 
   stat_function(fun=pnorm, args=list(mean=logmu, sd=logsigma), aes(color='model')) +
@@ -665,10 +663,10 @@ The figures below shows normal probability plots for adult weights, w, and for t
 logarithms, log10 w.
 ```{r}
 ggplot()+
-  stat_qq(aes(sample=adultWeight$wtkg2, color='weights'), 
+  stat_qq(aes(sample=brfss$wtkg2, color='weights'), 
           na.rm = TRUE, geom="line", distribution = qnorm) +
   #the model as per mu and sigma
-  geom_qq(aes(sample = rnorm(length(adultWeight$wtkg2), mean=mu, sd=sigma), 
+  geom_qq(aes(sample = rnorm(length(brfss$wtkg2), mean=mu, sd=sigma), 
               color='model'), geom='line') +
   scale_color_manual('Cases', values = c('blue', 'red')) +
   labs(x='z', y='adult weight(kg)') +
@@ -678,10 +676,10 @@ ggplot()+
 ```{r}
 ggplot()+
   #taking logarithmic weights
-  stat_qq(aes(sample=log10(adultWeight$wtkg2), color='weights'), 
+  stat_qq(aes(sample=log10(brfss$wtkg2), color='weights'), 
           na.rm = TRUE, geom="line", distribution = qnorm) +
   #the model as per mu and sigma
-  geom_qq(aes(sample = rnorm(length(adultWeight$wtkg2), mean=logmu, sd=logsigma), 
+  geom_qq(aes(sample = rnorm(length(brfss$wtkg2), mean=logmu, sd=logsigma), 
               color='model'), geom='line') +
   scale_color_manual('Cases', values = c('blue', 'red')) +
   labs(x='z', y='adult weight(log10 kg)') +
@@ -762,7 +760,7 @@ ggplot()+
   #the model as per mu and sigma
   geom_qq(aes(sample = rnorm(length(log_pops), mean = mu, sd = sigma), 
               color='model'), geom='line') +
-  scale_color_manual('Cases', values = c('blue', 'light blue')) +
+  scale_color_manual('Cases', values = c('blue', 'red')) +
   labs(x='Standard Deviations from mean (z)', y='log10 population') +
   theme(legend.position = c(0.2, 0.7)) 
 ```
@@ -779,3 +777,162 @@ Analytic models are also a form of data compression. When a model fits a dataset
 It is sometimes surprising when data from a natural phenomenon fit an analytic distribution, but these observations can provide insight into physical systems. Sometimes we can explain why an observed distribution has a particular form. For example, Pareto distributions are often the result of generative processes with positive feedback (so-called preferential attachment processes).
 Also, analytic distributions lend themselves to mathematical analysis.
 But it is important to remember that all models are imperfect. Data from the real world never fit an analytic distribution perfectly. People sometimes talk as if data are generated by models; for example, they might say that the distribution of human heights is normal, or the distribution of income is lognormal. Taken literally, these claims cannot be true; there are always differences between the real world and mathematical models.
+
+
+## Probability Density Functions
+### PDFs
+The derivative of a CDF is called a probability density function, or PDF. For example, the PDF of an exponential distribution is:
+PDFexpo(x) = λe^(-λx)
+
+Evaluating a PDF for a particular value of x is usually not useful. The result
+is not a probability; it is a probability density.
+In physics, density is mass per unit of volume; in order to get a mass, you have to multiply by volume or, if the density is not constant, you have to integrate over volume.
+Similarly, probability density measures probability per unit of x. In order to get a probability mass, you have to integrate over x.
+
+The following example creates a NormalPdf with the mean and variance of adult female heights, in cm, from the BRFSS.
+```{r}
+#filtering data for female heights
+adult_female_heights <- brfss %>%
+  subset(sex==2) %>%
+  .$htm3
+mean <- adult_female_heights %>%
+  mean(na.rm=TRUE)
+sd <- adult_female_heights %>%
+  sd(na.rm=TRUE)
+#random generation for the normal distibution with mean and standard deviation equal to thos of female heights
+brfss_norm <- adult_female_heights %>%
+  rnorm(mean=mean, sd=sd)
+```
+
+```{r}
+brfss_norm %>%
+  data.frame(x=.) %>%
+  ggplot(aes(x=x, ..density..)) + 
+  geom_freqpoly(binwidth = 2, na.rm = TRUE, aes(color='normal'))+
+  geom_density(n=500, na.rm = TRUE, aes(color='sample KDE'), kernel='gaussian')+
+  scale_color_manual('Cases', values = c('blue', 'red')) +
+  labs(x="Height(cm)", y="density") +
+  theme(legend.position = c(0.2, 0.7))
+```
+
+### Kernel Density Estimation
+Kernel density estimation (KDE) is an algorithm that takes a sample and finds an appropriately smooth PDF that fits the data.
+Figure above shows the normal density function that models adult female heights in the  USand a KDE based on a sample of 500 random heights. The estimate is a good match for the original distribution. The word "gaussian" appears in the kernel argument in geom_density() function because it uses a filter based on a Gaussian distribution to smooth the KDE.
+
+Estimating a density function with KDE is useful for several purposes:
+* Visualization: During the exploration phase of a project, CDFs are usually the best visualization of a distribution. After you look at a CDF, you can decide whether an estimated PDF is an appropriate model of the distribution. If so, it can be a better choice for presenting the distribution to an audience that is unfamiliar with CDFs.
+* Interpolation: An estimated PDF is a way to get from a sample to a model of the population. If you have reason to believe that the population distribution is smooth, you can use KDE to interpolate the density for values that don't appear in the sample.
+* Simulation: Simulations are often based on the distribution of a sample. If the sample size is small, it might be appropriate to smooth the sample distribution using KDE, which allows the simulation to explore more possible outcomes, rather than replicating the observed.
+
+### The distribution framework
+At this point we have seen PMFs, CDFs and PDFs; let's take a minute to review. 
+We started with PMFs, which represent the probabilities for a discrete set of values. To get from a PMF to a CDF, you add up the probability masses to get cumulative probabilities. To get from a CDF back to a PMF, you compute differences in cumulative probabilities. We'll see the implementation of these operations in the next few sections.
+A PDF is the derivative of a continuous CDF; or, equivalently, a CDF is the integral of a PDF. Remember that a PDF maps from values to probability densities; to get a probability, you have to integrate.
+To get from a discrete to a continuous distribution, you can perform various kinds of smoothing. One form of smoothing is to assume that the data come from an analytic continuous distribution (like exponential or normal) and to estimate the parameters of that distribution. Another option is kernel density estimation.
+The opposite of smoothing is discretizing, or quantizing. If you evaluate a PDF at discrete points, you can generate a PMF that is an approximation of the PDF. You can get a better approximation using numerical integration. To distinguish between continuous and discrete CDFs, it might be better for a discrete CDF to be a "cumulative mass function," but as far as I can tell no one uses that term.
+
+### Moments
+Any time you take a sample and reduce it to a single number, that number is a statistic. The statistics we have seen so far include mean, variance, median, and interquartile range.
+A raw moment is a kind of statistic. If you have a sample of values, x(i), the kth raw moment is:
+m(k) = 1/n*sum(x(i)^k)
+When k = 1 the result is the sample mean. The other raw moments don't mean much by themselves, but they are used in some computations.
+The central moments are more useful. The kth central moment is:
+m(k) = 1/n*sum((x(i) - mean(x))^k)
+When k = 2 the result is the second central moment, which you might recognize as variance. 
+When you report moment-based statistics, it is important to think about the units. For example, if the values xi are in cm, the first raw moment is also in cm. But the second moment is in cm square, the third moment is in cm cube, and so on.
+Because of these units, moments are hard to interpret by themselves. That's why, for the second moment, it is common to report standard deviation, which is the square root of variance, so it is in the same units as x(i).
+
+### Skewness
+Skewness is a property that describes the shape of a distribution. If the distribution is symmetric around its central tendency, it is unskewed. If the values extend farther to the right, it is "right skewed" and if the values extend left, it is "left skewed."
+Given a sequence of values, xi, the sample skewness, g1, can be computed like this:
+```{r}
+xi <- rexp(100)
+g1 <- xi %>%
+  timeDate::skewness()
+g1
+```
+
+Negative skewness indicates that a distribution skews left; positive skewness indicates that a distribution skews right. The magnitude of g1 indicates the strength of the skewness, but by itself it is not easy to interpret.
+In practice, computing sample skewness is usually not a good idea. If there are any outliers, they have a disproportionate effect on g1.
+Another way to evaluate the asymmetry of a distribution is to look at the relationship between the mean and median. Extreme values have more effect on the mean than the median, so in a distribution that skews left, the mean is less than the median. In a distribution that skews right, the mean is greater.
+
+Pearson's median skewness coeffcient is a measure of skewness based on the difference between the sample mean and median:
+g(p) = 3*(mean - median)/sd
+This statistic is robust, which means that it is less vulnerable to the effect of outliers. 
+As an example, let's look at the skewness of birth weights in the NSFG pregnancy data.
+
+```{r}
+#calculate sample skewness
+xi <- live %>%
+  subset(!is.na(totalwgt_lb)) %>%
+  .$totalwgt_lb
+g1 <- xi %>%
+  timeDate::skewness()
+g1
+```
+```{r}
+#calculate Pearson's median skewness coefficient
+m <- live$totalwgt_lb %>%
+  mean(na.rm=TRUE)
+md <- live$totalwgt_lb %>%
+  median(na.rm=TRUE)
+sigma <- live$totalwgt_lb %>%
+  sd(na.rm=TRUE)
+gp <- 3*(m-md)/sigma
+gp
+```
+
+
+```{r}
+live %>%
+  ggplot(aes(x=totalwgt_lb, ..density..)) + 
+  geom_density(na.rm = TRUE, color='blue', kernel='gaussian') +
+  geom_vline(aes(xintercept = mean(x=totalwgt_lb, na.rm=TRUE)), 
+             colour='red') +
+  annotate("text", x = mean(x=live$totalwgt_lb, na.rm=TRUE)-0.3, y = 0.1, 
+           label = "mean", color = 'red', angle=90) +
+  geom_vline(aes(xintercept = median(x=totalwgt_lb, na.rm=TRUE)), 
+             colour='black') +
+  annotate("text", x = median(x=live$totalwgt_lb, na.rm=TRUE)+0.3, y = 0.1, 
+           label = "median", color = 'black', angle=90) +
+  labs(x="lbs", y="PDF")
+```
+
+The left tail appears longer than the right, so we suspect the distribution is skewed left. The mean, 7.27 lbs, is a bit less than the median, 7.38 lbs, so that is consistent with left skew. And
+both skewness coefficients are negative: sample skewness is -0.59; Pearson's median skewness is -0.23.
+
+Now let's compare this distribution to the distribution of adult weight in the BRFSS.
+```{r}
+mean <- brfss$wtkg2 %>%
+  mean(na.rm=TRUE)
+sd <- brfss$wtkg2 %>%
+  sd(na.rm=TRUE)
+#random generation for the normal distibution with mean and standard deviation equal to those of adult heights
+brfss_norm <- brfss$wtkg2 %>%
+  rnorm(mean=mean, sd=sd)
+```
+
+```{r}
+brfss_norm %>%
+  data.frame(x=.) %>%
+  ggplot(aes(x=x, y=..density..)) + 
+  geom_freqpoly(binwidth=0.7, na.rm = TRUE, color='blue')+
+  geom_vline(aes(xintercept = mean(x=brfss$wtkg2, na.rm=TRUE)), 
+             colour='red') +
+  annotate("text", x = mean(x=brfss$wtkg2, na.rm=TRUE)+4, y = 0.01, 
+           label = "mean", color = 'red', angle=90) +
+  geom_vline(aes(xintercept = median(x=brfss$wtkg2, na.rm=TRUE)), 
+             colour='black') +
+  annotate("text", x = median(x=brfss$wtkg2, na.rm=TRUE)-4, y = 0.01, 
+           label = "median", color = 'black', angle=90) +
+  labs(x="kg", y="PDF") 
+```
+
+The distribution appears skewed to the right.
+Sure enough, the mean, 79.0, is bigger than the median, 77.3. The sample
+skewness is 1.1 and Pearson's median skewness is 0.26.
+The sign of the skewness coecient indicates whether the distribution skews
+left or right, but other than that, they are hard to interpret. Sample skewness
+is less robust; that is, it is more susceptible to outliers. As a result it is less
+reliable when applied to skewed distributions, exactly when it would be most
+relevant.
