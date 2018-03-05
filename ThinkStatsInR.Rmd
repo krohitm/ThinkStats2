@@ -1,6 +1,8 @@
 ---
 title: "thinkstats"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE, message=FALSE}
@@ -11,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(extraDistr)
 library(tidyverse)
-library(plotly)
+#library(plotly)
 ```
 
 The data source is obtained from https://www.cdc.gov/nchs/nsfg/nsfg_cycle6.htm
@@ -410,7 +412,7 @@ PMFs work well if the number of values is small. But as the number of values inc
 
 ```{r}
 live %>%
-  ggplot(aes(x=totalwgt_lb, ..density.., fill=birthOrder)) + 
+  ggplot(aes(x=totalwgt_lb, ..density.., fill=birthNumber)) + 
   geom_histogram(bins=100, stat="bin", na.rm = TRUE, color='black') +
   labs(x="weight(pounds)", y="probability") + 
   theme(legend.position = c(0.2, 0.7)) 
@@ -436,7 +438,7 @@ The CDF also provides a visual representation of the shape of the distribution. 
 CDFs are especially useful for comparing distributions. For example, here is the code that plots the CDF of birth weight for first babies and others.
 ```{r}
 live %>%
-  ggplot(aes(x=totalwgt_lb, color=birthOrder)) +
+  ggplot(aes(x=totalwgt_lb, color=birthNumber)) +
   stat_ecdf(geom="step", na.rm = TRUE) +
   labs(x="weight(pounds)", y="CDF") + 
   theme(legend.position = c(0.2, 0.7)) 
@@ -845,6 +847,7 @@ Because of these units, moments are hard to interpret by themselves. That's why,
 ### Skewness
 Skewness is a property that describes the shape of a distribution. If the distribution is symmetric around its central tendency, it is unskewed. If the values extend farther to the right, it is "right skewed" and if the values extend left, it is "left skewed."
 Given a sequence of values, xi, the sample skewness, g1, can be computed like this:
+
 ```{r}
 xi <- rexp(100)
 g1 <- xi %>%
@@ -885,7 +888,7 @@ gp
 
 ```{r}
 live %>%
-  ggplot(aes(x=totalwgt_lb, ..density..)) + 
+  ggplot(aes(x=totalwgt_lb)) + 
   geom_density(na.rm = TRUE, color='blue', kernel='gaussian') +
   geom_vline(aes(xintercept = mean(x=totalwgt_lb, na.rm=TRUE)), 
              colour='red') +
@@ -902,6 +905,29 @@ The left tail appears longer than the right, so we suspect the distribution is s
 both skewness coefficients are negative: sample skewness is -0.59; Pearson's median skewness is -0.23.
 
 Now let's compare this distribution to the distribution of adult weight in the BRFSS.
+
+```{r}
+#calculate sample skewness
+xi <- brfss %>%
+  subset(!is.na(wtkg2)) %>%
+  .$wtkg2
+g1 <- xi %>%
+  timeDate::skewness()
+g1
+```
+
+```{r}
+#calculate Pearson's median skewness coefficient
+m <- brfss$wtkg2 %>%
+  mean(na.rm=TRUE)
+md <- brfss$wtkg2 %>%
+  median(na.rm=TRUE)
+sigma <- brfss$wtkg2 %>%
+  sd(na.rm=TRUE)
+gp <- 3*(m-md)/sigma
+gp
+```
+
 ```{r}
 mean <- brfss$wtkg2 %>%
   mean(na.rm=TRUE)
@@ -913,26 +939,144 @@ brfss_norm <- brfss$wtkg2 %>%
 ```
 
 ```{r}
-brfss_norm %>%
-  data.frame(x=.) %>%
-  ggplot(aes(x=x, y=..density..)) + 
-  geom_freqpoly(binwidth=0.7, na.rm = TRUE, color='blue')+
+brfss %>%
+  ggplot(aes(x=wtkg2)) + 
+  geom_density(adjust = 1.5, na.rm = TRUE, color='blue', kernel='gaussian') +
   geom_vline(aes(xintercept = mean(x=brfss$wtkg2, na.rm=TRUE)), 
              colour='red') +
-  annotate("text", x = mean(x=brfss$wtkg2, na.rm=TRUE)+4, y = 0.01, 
+  annotate("text", x = mean(x=brfss$wtkg2, na.rm=TRUE) + 4, y = 0.01, 
            label = "mean", color = 'red', angle=90) +
   geom_vline(aes(xintercept = median(x=brfss$wtkg2, na.rm=TRUE)), 
              colour='black') +
-  annotate("text", x = median(x=brfss$wtkg2, na.rm=TRUE)-4, y = 0.01, 
+  annotate("text", x = median(x=brfss$wtkg2, na.rm=TRUE) - 4, y = 0.01, 
            label = "median", color = 'black', angle=90) +
   labs(x="kg", y="PDF") 
 ```
 
 The distribution appears skewed to the right.
-Sure enough, the mean, 79.0, is bigger than the median, 77.3. The sample
-skewness is 1.1 and Pearson's median skewness is 0.26.
-The sign of the skewness coecient indicates whether the distribution skews
-left or right, but other than that, they are hard to interpret. Sample skewness
-is less robust; that is, it is more susceptible to outliers. As a result it is less
-reliable when applied to skewed distributions, exactly when it would be most
-relevant.
+Sure enough, the mean, 79.0, is bigger than the median, 77.3. The sample skewness is 1.1 and Pearson's median skewness is 0.26.
+The sign of the skewness coefficient indicates whether the distribution skews left or right, but other than that, they are hard to interpret. Sample skewness is less robust; that is, it is more susceptible to outliers. As a result it is less reliable when applied to skewed distributions, exactly when it would be most relevant.
+Pearson's median skewness is based on a computed mean and variance, so it is also susceptible to outliers, but since it does not depend on a third moment, it is somewhat more robust.
+
+## Relationships between variables
+### Scatter Plots
+The simplest way to check for a relationship between two variables is a scatter plot, but making a good scatter plot is not always easy. As an example, we'll plot weight versus height for the respondents in the BRFSS. People who are taller tend to be heavier. Of course, it is not a perfect relationship: there are short heavy people and tall light ones. But if you are trying to guess someone's weight, you will be more accurate if you know their height than if you don't. 
+We'll be sampling 2000 rows, without replacement. 
+
+```{r}
+brfss %>%
+  sample_n(2000) %>%
+  ggplot() +
+  geom_point(aes(x=htm3, y=wtkg2), na.rm=TRUE, color='blue') +
+  xlim(140, 210) +
+  ylim(20, 200) +
+  labs(x='height (cm)', y='weight (kg)')
+```
+
+As we expected, taller people tend to be heavier.
+But this is not the best representation of the data, because the data are packed into columns. The problem is that the heights are rounded to the nearest inch, converted to centimeters, and then rounded again. Some information is lost in translation.
+We can't get that information back, but we can minimize the effect on the scatter plot by jittering the data, which means adding random noise to reverse the effect of rounding off. Since these measurements were rounded to the nearest inch, they might be off by up to 0.5 inches or 1.3 cm. Similarly, the weights might be off by 0.5 kg.
+
+```{r}
+brfss %>%
+  sample_n(2000) %>%
+  ggplot() +
+  geom_jitter(aes(x=htm3, y=wtkg2), na.rm=TRUE, width = 1.3, height = 0.5, color='blue') +
+  xlim(140, 210) +
+  ylim(20, 200) +
+  labs(x='height (cm)', y='weight (kg)')
+```
+
+Jittering reduces the visual effect of rounding and makes the shape of the relationship clearer. But in general you should only jitter data for purposes of visualization and avoid using jittered
+data for analysis.
+Even with jittering, this is not the best way to represent the data. There are many overlapping points, which hides data in the dense parts of the figure and gives disproportionate emphasis to outliers. This effect is called saturation.
+We can solve this problem with the alpha parameter, which makes the points partly transparent:
+
+```{r}
+brfss %>%
+  sample_n(2000) %>%
+  ggplot() +
+  geom_jitter(aes(x=htm3, y=wtkg2), na.rm=TRUE, 
+              width = 1.3, height = 0.5, color='blue', alpha=0.2) +
+  xlim(140, 210) +
+  ylim(20, 200) +
+  labs(x='height (cm)', y='weight (kg)')
+```
+
+This figure shows the result. Overlapping data points look darker, so darkness is proportional to density. In this version of the plot, we can see two details that were not apparent before: vertical clusters at several heights and a horizontal line near 90 kg or 200 pounds. Since this data is based on self-reports in pounds, the most likely explanation is that some respondents reported rounded values.
+
+Using transparency works well for moderate-sized datasets, but this figure only shows the first 5000 records in the BRFSS, out of a total of 414 509.
+To handle larger datasets, another option is a hexbin plot, which divides the
+graph into hexagonal bins and colors each bin according to how many data
+points fall in it.
+
+```{r}
+brfss %>%
+  ggplot() +
+  geom_hex(aes(x=htm3, y=wtkg2), na.rm = TRUE) +
+  xlim(140, 210) +
+  ylim(20, 200) +
+  labs(x='height (cm)', y='weight (kg)')
+```
+
+The figure above shows the result. An advantage of a hexbin is that it shows the shape of the relationship well, and it is efficient for large datasets. A drawback is that it makes the outliers invisible.
+The point of this example is that it is not easy to make a scatter plot that shows relationships clearly without introducing misleading artifacts.
+
+### Characterizing relationships
+# HOLDING THIS PART FOR NOW
+Scatter plots provide a general impression of the relationship between variables, but there are other visualizations that provide more insight into the nature of the relationship. One option is to bin one variable and plot percentiles of the other.
+```{r}
+bins = seq(135, 210, 5)
+bins <- bins %>%
+  append(0, after = 0)
+bins <- bins %>% 
+  append(max(brfss$htm3, na.rm = TRUE))
+indices <- brfss %>%
+  subset(!is.na(htm3)) %>%
+  .$htm3 %>%
+  cut(length(bins), breaks = bins, include.lowest = TRUE, labels = FALSE) %>%
+  as.numeric()
+```
+
+### Correlation
+A correlation is a statistic intended to quantify the strength of the relationship between two variables.
+A challenge in measuring correlation is that the variables we want to compare are often not expressed in the same units. And even if they are in the same units, they come from different distributions.
+
+There are two common solutions to these problems:
+1. Transform each value to a standard scores, which is the number of standard deviations from the mean. This transform leads to the "Pearson product-moment correlation coefficient."
+2. Transform each value to its rank, which is its index in the sorted list of values. This transform leads to the "Spearman rank correlation coeffcient."
+
+If X is a series of n values, xi, we can convert to standard scores by subtracting the mean and dividing by the standard deviation: zi = (xi - mu)/sigma.
+
+The numerator is a deviation: the distance from the mean. Dividing by sigma standardizes the deviation, so the values of Z are dimensionless (no units) and their distribution has mean 0 and variance 1.
+
+If X is normally distributed, so is Z. But if X is skewed or has outliers, so does Z; in those cases, it is more robust to use percentile ranks. If we compute a new variable, R, so that ri is the rank of xi, the distribution of R is uniform from 1 to n, regardless of the distribution of X.
+
+### Covariance
+Covariance is a measure of the tendency of two variables to vary together.
+If we have two series, X and Y , their deviations from the mean are
+  dxi = xi - mean(x)
+  dyi = yi - mean(y)
+where mean(x) is the sample mean of X and mean(y) is the sample mean of Y . If X and Y vary together, their deviations tend to have the same sign.
+If we multiply them together, the product is positive when the deviations have the same sign and negative when they have the opposite sign. So adding up the products gives a measure of the tendency to vary together.
+Covariance is the mean of these products:
+Cov(X, Y ) = 1/n * sum(dxi * dyi)
+where n is the length of the two series (they have to be the same length).
+If you have studied linear algebra, you might recognize that Cov is the dot product of the deviations, divided by their length. So the covariance is maximized if the two vectors are identical, 0 if they are orthogonal, and negative if they point in opposite directions.
+
+### Pearson's correlation
+Covariance is useful in some computations, but it is seldom reported as a summary statistic because it is hard to interpret. Among other problems, its units are the product of the units of X and Y . For example, the covariance of weight and height in the BRFSS dataset is 113 kilogram-centimeters, whatever that means.
+One solution to this problem is to divide the deviations by the standard deviation, which yields standard scores, and compute the product of standard scores.
+This value is called Pearson's correlation(ρ) after Karl Pearson, an influential early statistician. It is easy to compute and easy to interpret. Because standard scores are dimensionless, so is ρ.
+
+Pearson's correlation is always between -1 and +1 (including both). If ρ is positive, we say that the correlation is positive, which means that when one variable is high, the other tends to be high. If ρ is negative, the correlation is negative, so when one variable is high, the other is low.
+The magnitude of ρ indicates the strength of the correlation. If ρ is 1 or -1, the variables are perfectly correlated, which means that if you know one, you can make a perfect prediction about the other.
+Most correlation in the real world is not perfect, but it is still useful. The correlation of height and weight is 0.51, which is a strong correlation compared to similar human-related variables.
+```{r}
+brfss$htm3 %>%
+  #use = "complete.obs ignores the NAs"
+  cor(brfss$wtkg2, use="complete.obs", method = "pearson")
+```
+
+### Non-linear relationships
+If Pearson's correlation is near 0, it is tempting to conclude that there is no relationship between the variables, but that conclusion is not valid. Pearson's correlation only measures linear relationships. If there's a nonlinear relationship, ρ understates its strength.
